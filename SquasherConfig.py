@@ -11,4 +11,5 @@ defaultSettings = {
     'text_do_header' : "===== Do =====",
     'text_out_header' : "===== Done =====",
     'require_zim_task_format' : True,
+    'encourage_use_of_verb_tag' : True,
 }

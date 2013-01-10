@@ -90,42 +90,51 @@ class NaiveBayes:
         
 """ Code that test the basic operation of the RandomTuner """    
 def main():
+    def tokenize(s):
+        for word in s.split():
+            if word not in ["has", "a", "and", "an", "is", "the", "have"]:
+                yield word
     
     # Build
     nbc = NaiveBayes()
     for i in range(1):
-        nbc.AddTokens("Cat", "has four legs".split())
-        nbc.AddTokens("Cat", "has pointy ears".split())
-        nbc.AddTokens("Cat", "has fur and long tail".split())
-        nbc.AddTokens("Cat", "is domesticated".split())
-        nbc.AddTokens("Cat", "says meow.".split())
+        nbc.AddTokens("Cat", list(tokenize("has four legs")))
+        nbc.AddTokens("Cat", list(tokenize("has pointy ears")))
+        nbc.AddTokens("Cat", list(tokenize("has fur and long tail")))
+        nbc.AddTokens("Cat", list(tokenize("is domesticated")))
+        nbc.AddTokens("Cat", list(tokenize("says meow.")))
           
-        nbc.AddTokens("Mouse", "has four legs".split())
-        nbc.AddTokens("Mouse", "has round ears".split())
-        nbc.AddTokens("Mouse", "is small".split())
-        nbc.AddTokens("Mouse", "has fur".split())
-        nbc.AddTokens("Mouse", "has long tail".split())
+        nbc.AddTokens("Pig", list(tokenize("has four legs")))
+        nbc.AddTokens("Pig", list(tokenize("has floppy ears")))
+        nbc.AddTokens("Pig", list(tokenize("is domesticated")))
+        nbc.AddTokens("Pig", list(tokenize("has squiggly tail")))
         
-        nbc.AddTokens("Dog", "has four legs".split())
-        nbc.AddTokens("Dog", "has fur".split())
-        nbc.AddTokens("Dog", "is domesticated".split())
-        nbc.AddTokens("Dog", "barks".split())
+        nbc.AddTokens("Mouse", list(tokenize("has four legs")))
+        nbc.AddTokens("Mouse", list(tokenize("has round ears")))
+        nbc.AddTokens("Mouse", list(tokenize("is small")))
+        nbc.AddTokens("Mouse", list(tokenize("has fur")))
+        nbc.AddTokens("Mouse", list(tokenize("has long tail")))
         
-        nbc.AddTokens("Monkey", "has two legs".split())
-        nbc.AddTokens("Monkey", "has fur".split())
-        nbc.AddTokens("Monkey", "is intelligent".split())
-        nbc.AddTokens("Monkey", "lives in trees".split())
+        nbc.AddTokens("Dog", list(tokenize("has four legs")))
+        nbc.AddTokens("Dog", list(tokenize("has fur")))
+        nbc.AddTokens("Dog", list(tokenize("is domesticated")))
+        nbc.AddTokens("Dog", list(tokenize("barks")))
         
-        nbc.AddTokens("Human", "has two legs".split())
-        nbc.AddTokens("Human", "speaks".split())
-        nbc.AddTokens("Human", "is intelligent".split())
-        nbc.AddTokens("Human", "does not have tail".split())
-        nbc.AddTokens("Human", "does not have fur".split())
+        nbc.AddTokens("Monkey", list(tokenize("has two legs")))
+        nbc.AddTokens("Monkey", list(tokenize("has fur")))
+        nbc.AddTokens("Monkey", list(tokenize("is intelligent")))
+        nbc.AddTokens("Monkey", list(tokenize( "lives in trees")))
+        
+        nbc.AddTokens("Human", list(tokenize("has two legs")))
+        nbc.AddTokens("Human", list(tokenize("speaks")))
+        nbc.AddTokens("Human", list(tokenize("is intelligent")))
+        nbc.AddTokens("Human", list(tokenize("does not have tail")))
+        nbc.AddTokens("Human", list(tokenize("does not have fur")))
     
     # Test
     import re
     s = "What is an creature that lives in trees and has fur?"
-    t = (re.sub(r'\W+', ' ', s)).split()
+    t = list(tokenize((re.sub(r'\W+', ' ', s))))
     print(s)
     probs = nbc.GetProbabilites(t)
     for creature in probs:

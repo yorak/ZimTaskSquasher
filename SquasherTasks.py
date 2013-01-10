@@ -10,7 +10,7 @@ from collections import namedtuple
 from dateutil import parser
 
 """ The main task data structure (as namedtuple) """
-Task = namedtuple('Task', ['taskline', 'state', 'verb' , 'task', 'details',
+Task = namedtuple('Task', ['taskline', 'state', 'verb', 'task', 'tags', 'details',
                            'due', 'priority', 'effortEstimate', 'effortReal'])
  
 ## Some regular expressions that are used in task parsing ## 
@@ -19,10 +19,11 @@ taskRe = re.compile(r"""
     ^\s*            # Whitespace at the start of the line
     \[([*Xx ])\]    # The check mark that defines this line being a task
                     #  group(1) being the state of the check mark
-    \s+(\w+)\s+     # First one of the task that is typically a verb
+    \s+([@\w]+)\s+  # First one of the task that is typically a verb (can be a @tag)
     ([^.!]+)        # Rest of the sentence describing the task
     .*?             # All the rest
     """, re.VERBOSE)
+tagRe = re.compile("\s+(@[\w]+)[\s!?.,]+")
 dueRe = re.compile("\[d:\s([\d\-/]+)\]")     
 # priority as concecutive Exclamation marks
 priorityRe = re.compile("!+");
@@ -62,6 +63,7 @@ def line_to_task(line):
             state = taskMatch.group(1).upper(), 
             verb = taskMatch.group(2),
             task = taskMatch.group(3).rstrip('\n'),
+            tags = tagRe.findall(line),
             details = [],
             due = parsedDue, priority = taskPriority,
             effortEstimate=taskEffortEstimate, effortReal=taskEffortReal)

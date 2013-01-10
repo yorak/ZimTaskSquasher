@@ -33,7 +33,7 @@ from WindowsIdle import get_idle_time
 def enum(*sequential, **named):
     enums = dict(zip(sequential, range(len(sequential))), **named)
     return type('Enum', (), enums)
-States = enum('WAIT_NEW', 'STARTED', 'POSTPONED', 'STOPPED', 'DONE')  
+States = enum('WAIT_NEW', 'STARTED', 'PAUSED', 'STOPPED')  
         
 class TaskSquasherLiteWindow:
     
@@ -58,37 +58,60 @@ class TaskSquasherLiteWindow:
             dtstamp = datetime.datetime.now()
             act = "%s\t%s\t%s\n" % (dtstamp.isoformat(), activity.upper(), task) 
             logfile.write(act)
+            
+    def update_button_states(self, state=None):
+        if state==None:
+            state = self.state
+            
+        self.workaround_block_signals = True
+        
+        if (state==States.WAIT_NEW):     
+            self.doWidget.set_active(False)
+            self.pauseWidget.set_active(False)
+            self.entryTaskWidget.set_sensitive(True)
+        elif (state==States.STARTED):
+            self.doWidget.set_active(True)
+            self.pauseWidget.set_active(False)
+            self.entryTaskWidget.set_sensitive(False)
+        elif (state==States.PAUSED):
+            self.doWidget.set_active(True)
+            self.pauseWidget.set_active(True)
+            self.entryTaskWidget.set_sensitive(False)
+        elif (state==States.STOPPED):
+            self.doWidget.set_active(False)
+            self.pauseWidget.set_active(False)
+            self.entryTaskWidget.set_sensitive(False)
+        
+        self.workaround_block_signals = False
 
     ## Signal callback functions. ##
     
     def on_toolbuttonLater_clicked(self, widget, data=None):
         # Stop active task
-        if self.activeTask and self.state == States.STARTED:
+        if self.activeTask:
             taskText = self.activeTask.verb+" "+self.activeTask.task
-            self.log_activity(self.task_activity_log_file, taskText, "STOPPED")
+            if self.state == States.STARTED:
+                self.log_activity(self.task_activity_log_file, taskText, "STOPPED")
             self.log_activity(self.task_activity_log_file, taskText, "POSTPONED")
             
-        self.state = States.WAIT_NEW
         self.activeTask = None
-        self.workaround_block_signals = True
-        self.entryTaskWidget.set_sensitive(True)
-        self.doWidget.set_active(False)
-        self.pauseWidget.set_active(False)
-        self.workaround_block_signals = False
-        
         # clears it
         self.entryTaskWidget.set_text("")
+        self.state = States.WAIT_NEW
+        
+        # Make sure UI is in right state
+        self.update_button_states()
+        
         
     def on_toolbuttonDo_clicked(self, widget, data=None):
         if self.workaround_block_signals:
             return
-        if self.state == States.STARTED:
-            self.workaround_block_signals = True
-            widget.set_active(True)
-            self.workaround_block_signals = False
+       
+        # It is already being squashed!
+        if self.state == States.STARTED or self.state == States.PAUSED:
+            self.update_button_states()
             return
-        
-        
+
         taskLine = self.entryTaskWidget.get_text()        
         task = SquasherTasks.line_to_task(taskLine)
         
@@ -98,55 +121,48 @@ class TaskSquasherLiteWindow:
                 gtk.BUTTONS_CLOSE, "Task is not of Zim format")
             md.run()
             md.destroy()
-            
-            self.workaround_block_signals = True
-            self.doWidget.set_active(False)
-            self.pauseWidget.set_active(False)
-            self.workaround_block_signals = False
-
         else:            
+            if self.settings['encourage_use_of_verb_tag'] and \
+               (len(task.tags)==0 or task.verb!=task.tags[0]):
+                md = gtk.MessageDialog(self.window, 
+                gtk.DIALOG_DESTROY_WITH_PARENT, gtk.MESSAGE_INFO, 
+                gtk.BUTTONS_YES_NO, 
+                    r"""Consider @Using a tag as the task verb (first word of the task).
+                    Do you want to change it now?""")
+                if md.run()==gtk.RESPONSE_YES:
+                    # Abort action
+                    md.destroy()  
+                    self.update_button_states()
+                    return
+                else:
+                    md.destroy()
+                
             self.activeTask = task
             taskText = self.activeTask.verb+" "+self.activeTask.task
             self.state = States.STARTED
             self.log_activity(self.task_activity_log_file, taskText, "STARTED")
-            
-            self.workaround_block_signals = True
-            self.entryTaskWidget.set_sensitive(False)
-            self.doWidget.set_active(True)
-            self.pauseWidget.set_active(False)
-            self.workaround_block_signals = False
         
+        # Make sure UI is in right state        
+        self.update_button_states()
+       
     def on_toolbuttonPause_clicked(self, widget, data=None):
         if self.workaround_block_signals:
             return
             
-        if not self.activeTask:
-            self.workaround_block_signals = True
-            widget.set_active(False)
-            self.workaround_block_signals = False
-            return
+        if self.activeTask:            
+            taskText = self.activeTask.verb+" "+self.activeTask.task
+            
+            if self.state == States.STARTED:
+                self.state = States.PAUSED
+                self.log_activity(self.task_activity_log_file, taskText, "STOPPED")
+            # From paused state to started
+            elif self.state == States.PAUSED:
+                self.state = States.STARTED
+                self.log_activity(self.task_activity_log_file, taskText, "STARTED")
         
-        taskText = self.activeTask.verb+" "+self.activeTask.task
-        
-        if  self.state == States.STARTED:
-            self.workaround_block_signals = True
-            self.pauseWidget.set_active(True)
-            self.workaround_block_signals = False
-            self.state = States.STOPPED
-            self.log_activity(self.task_activity_log_file, taskText, "STOPPED")
-        # From paused state to started
-        elif  self.state == States.STOPPED:
-            self.workaround_block_signals = True
-            self.pauseWidget.set_active(False)
-            self.workaround_block_signals = False
-            self.state = States.STARTED
-            self.log_activity(self.task_activity_log_file, taskText, "STARTED")
-        # Prevent press if pausing makes no sense
-        else:
-            self.workaround_block_signals = True
-            self.pauseWidget.set_active(False)
-            self.workaround_block_signals = False
-        
+        # Make sure UI is in right state
+        self.update_button_states()
+    
             
     def on_toolbuttonDone_clicked(self, widget, data=None):
         if not self.activeTask:
@@ -154,21 +170,20 @@ class TaskSquasherLiteWindow:
             
         taskText = self.activeTask.verb+" "+self.activeTask.task
         
-        if  self.state == States.STARTED or self.state == States.STOPPED:
-            self.workaround_block_signals = True
-            self.pauseWidget.set_active(False)
-            self.doWidget.set_active(False)
-            self.entryTaskWidget.set_sensitive(True)
-            self.workaround_block_signals = False
-
+        if self.state == States.STARTED:
             # For easier parsing, go to DONE trough STOPPED
             self.log_activity(self.task_activity_log_file, taskText, "STOPPED")            
-            self.state = States.DONE
-            self.log_activity(self.task_activity_log_file, taskText, "DONE")
+        
+        self.log_activity(self.task_activity_log_file, taskText, "DONE")
             
-            # clears it
-            self.activeTask = None
-            self.entryTaskWidget.set_text("")
+        # clears it
+        self.state = States.WAIT_NEW
+        self.activeTask = None
+        self.entryTaskWidget.set_text("")
+        
+        # Make sure UI is in right state
+        self.update_button_states()
+        
             
     def check_activity(self):
         activeWindow = get_active_window_title()
