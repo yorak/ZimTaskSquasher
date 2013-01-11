@@ -20,13 +20,17 @@ try:
     import gobject
 except:
 	sys.exit(1)
+
+import datetime
+import os.path
+from collections import defaultdict
  
 import SquasherConfig
 import SquasherTasks
-import datetime
 
 from ActiveWindow import get_active_window_title
 from WindowsIdle import get_idle_time
+from NagDetector import test_if_should_nag, teach_classifiers, verify_classifiers
 
 ## Data structures etc. ##
 
@@ -49,6 +53,10 @@ class TaskSquasherLiteWindow:
     activeTask = None
     lastActiveWindowTitle = None
     userIdle = False
+    teaching = False
+    
+    # Nagging classifiers 
+    nagssifiers = None
     
     ## Helper methods ##
     
@@ -81,9 +89,24 @@ class TaskSquasherLiteWindow:
             self.doWidget.set_active(False)
             self.pauseWidget.set_active(False)
             self.entryTaskWidget.set_sensitive(False)
+            
+        if self.settings['nag']:
+            if self.teaching:
+                self.teachWidget.set_active(True)
+            else:
+                self.teachWidget.set_active(False)
+        else:
+            self.teachWidget.set_sensitive(False)
         
         self.workaround_block_signals = False
-
+    
+    def nag(self):
+        md = gtk.MessageDialog(self.window, 
+            gtk.DIALOG_DESTROY_WITH_PARENT, gtk.MESSAGE_WARNING, 
+            gtk.BUTTONS_OK, "Slacker!")
+        md.run()
+        md.destroy()
+        
     ## Signal callback functions. ##
     
     def on_toolbuttonLater_clicked(self, widget, data=None):
@@ -184,10 +207,20 @@ class TaskSquasherLiteWindow:
         # Make sure UI is in right state
         self.update_button_states()
         
-            
+    def on_toolbuttonTeach_clicked(self, widget, data=None):
+        if self.workaround_block_signals:
+            return        
+        # Toggle state
+        self.teaching = not self.teaching
+        
     def check_activity(self):
         activeWindow = get_active_window_title()
         idleTime = get_idle_time()
+        
+        if activeWindow=="":
+            activeWindow = "-"
+        
+        # Check for user idle
         if idleTime > self.settings['user_idle_threshold']:
             if not self.userIdle:
                 self.log_activity(self.user_activity_log_file, "User", "IDLE")
@@ -196,11 +229,26 @@ class TaskSquasherLiteWindow:
             if self.userIdle:
                 self.log_activity(self.user_activity_log_file, "User", "BACK")
                 self.userIdle = False
-                
+        
+        # Log active window
         if self.lastActiveWindowTitle!=activeWindow:
             self.log_activity(self.user_activity_log_file, activeWindow, "ACTIVATED")
             self.lastActiveWindowTitle = activeWindow
-            
+        
+            if self.settings['nag']:
+                # Teach active window to be specific for current task (or lack of)
+                if self.teaching and self.nag_teach_file:
+                    activeTags = []
+                    if self.activeTask:
+                        activeTags = self.activeTask.tags
+                    self.log_activity(self.nag_teach_file, activeWindow, str(activeTags))
+                elif self.activeTask and self.state == States.STARTED:
+                    doNag = test_if_should_nag(
+                        self.nagssifiers, self.activeTask.tags,
+                        activeWindow, self.settings['nag_require_all_tags'])
+                    if doNag:
+                        self.nag()
+                        
         # This makes the timer to go on and on
         return True
          
@@ -222,6 +270,8 @@ class TaskSquasherLiteWindow:
             self.log_activity(self.user_activity_log_file, "Activity monitor", "OFFLINE")
             self.user_activity_log_file.close()
             gobject.source_remove(self.timer)
+        if self.nag_teach_file:
+            self.nag_teach_file.close()
         gtk.main_quit()
         
     ## Member functions ##
@@ -234,26 +284,37 @@ class TaskSquasherLiteWindow:
         self.window = self.wTree.get_object("windowMain")
         
         if (self.window):
-            dic = { "on_toolbuttonLater_clicked" : self.on_toolbuttonLater_clicked,
-                    "on_toolbuttonDo_clicked" : self.on_toolbuttonDo_clicked,
-                    "on_toolbuttonPause_clicked" : self.on_toolbuttonPause_clicked,
-                    "on_toolbuttonDone_clicked" : self.on_toolbuttonDone_clicked,
-                    "on_windowMain_destroy" : self.destroy}
+            dic = { 'on_toolbuttonLater_clicked' : self.on_toolbuttonLater_clicked,
+                    'on_toolbuttonDo_clicked' : self.on_toolbuttonDo_clicked,
+                    'on_toolbuttonPause_clicked' : self.on_toolbuttonPause_clicked,
+                    'on_toolbuttonDone_clicked' : self.on_toolbuttonDone_clicked,
+                    'on_toolbuttonTeach_clicked' : self.on_toolbuttonTeach_clicked,
+                    'on_windowMain_destroy' : self.destroy}
             self.wTree.connect_signals(dic)
 
         self.entryTaskWidget = self.wTree.get_object("entryTask")
         self.doWidget = self.wTree.get_object("toolbuttonDo")    
         self.pauseWidget = self.wTree.get_object("toolbuttonPause")
+        self.teachWidget = self.wTree.get_object("toolbuttonTeach")
+        self.statusBar = self.wTree.get_object("statusbar")
         
         if (self.settings['keep_task_activity_log']):
-            self.task_activity_log_file = open(self.settings['task_activity_log_file'], 'a')
+            self.task_activity_log_file = open(self.settings['task_activity_log_file'], 'a+')
         if (self.settings['keep_user_activity_log']):           
             uari = self.settings['user_activity_refresh_interval']
             self.timer = gobject.timeout_add(uari, self.check_activity)        
-            self.user_activity_log_file = open(self.settings['user_activity_log_file'], 'a')
+            self.user_activity_log_file = open(self.settings['user_activity_log_file'], 'a+')
             self.log_activity(self.user_activity_log_file, "Activity monitor", "ONLINE")
             
-        
+        if self.settings['nag']:
+            nagfn = self.settings['nag_teach_file']
+            if os.path.isfile(nagfn):
+                self.nagssifiers = teach_classifiers(nagfn)
+                verify_classifiers(self.nagssifiers, nagfn, verbose=2)
+            
+            # Open for possible additional teaching
+            self.nag_teach_file = open(nagfn, 'a+')
+            
         # and the window
         self.window.show()
 

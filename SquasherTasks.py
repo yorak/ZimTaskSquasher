@@ -28,7 +28,7 @@ dueRe = re.compile("\[d:\s([\d\-/]+)\]")
 # priority as concecutive Exclamation marks
 priorityRe = re.compile("!+");
 # effort estinate of the form (11.5/12h) where the first part is optional
-effortRe = re.compile("\(((\d+\.?\d*)/)?(\d+)h\)") 
+effortRe = re.compile("\(((\d+\.?\d*)/)?(\d+)[hp]\)") 
 
 
 def line_to_task(line):
