@@ -13,7 +13,8 @@ Current features:
 
 For now Only the Lite version is available. Run it from command line with
 ```bash
-python taskSquashLite.py```
+python taskSquashLite.py
+```
 
 Planned features:
 --------------
