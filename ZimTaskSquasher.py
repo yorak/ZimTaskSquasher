@@ -30,48 +30,6 @@ class ZimTaskSquasherWindow:
     
     ##  Member functions ##
     
-    def load_task_list(self, filename):
-        
-        taskfile = open(filename, 'r')
-        readtarget = None
-        detailstarget = None
-        
-        tasksIn = []
-        tasksDo = []
-        tasksOut = []
-        
-        while 1:
-            line = taskfile.readline()
-            if not line:
-                break
-
-            if SquasherTasks.headerRe.search(line):
-                readtarget = None
-                detailstarget = None
-                
-                if self.settings["text_in_header"] in line:
-                    readtarget = tasksIn
-                elif self.settings["text_do_header"] in line:
-                    readtarget = tasksDo
-                elif self.settings["text_out_header"] in line:
-                    readtarget = tasksOut
-                
-                continue
-            
-            # Check if the line contains a task  
-            newTask = SquasherTasks.line_to_task(line)
-            if newTask and readtarget!=None:
-                readtarget.append(newTask)
-                # Collect following lines detailing the task here
-                detailstarget = newTask.details                
-            
-            # If there is active task details object. Pass all the following
-            #  lines to its details field.
-            elif readtarget!=None and detailstarget!=None:
-                detailstarget.append(line)
-                
-        return tasksIn, tasksDo, tasksOut
-    
     def save_task_list(self, filename):
         pass
     
