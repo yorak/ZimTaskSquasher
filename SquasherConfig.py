@@ -23,6 +23,7 @@ defaultSettings = {
     # Nagging
     'nag' : True, # Requires 'keep_task_activity_log' to be True
     'nag_teach_file' : r"""C:\MyTemp\juherask\Dropbox\Notebook\Work\Tasks\Logging\NagTeachLog.txt""",
-    'nag_motivational_posters_folder' : r"""C:\MyTemp\juherask\Dropbox\Notebook\Work\Tasks\Nag""",
+    'nag_motivational_posters_folder' : r"""Nags""",
+    'nag_slack' : 10000, # in ms, a violation longer than this leads to a nag
     'nag_require_all_tags' : False, # The activity is required to be relevant to all tags (True not recommended)
 }

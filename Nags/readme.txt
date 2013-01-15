@@ -1,0 +1,1 @@
+Add *.jpg files here and the Task Squasher will randomly pick one to nag you with when you stray for doing your selected task.

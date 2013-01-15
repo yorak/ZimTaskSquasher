@@ -54,12 +54,12 @@ class NaiveBayes:
         self._teachTotal+=1
         self._teachesPerLabel[label]+=1
         
-        # For label probability
-        self._countsTotal+=len(tokens)
-        self._countsPerLabel[label]+=len(tokens)
-        
-        # For token in label probability
         for token in tokens:
+            # For label probability
+            self._countsTotal+=1
+            self._countsPerLabel[label]+=1
+            
+            # For token in label probability            
             self._countsPerToken[token]+=1
             self._countsPerTokenAndLabel[token][label]+=1
                 
@@ -109,19 +109,28 @@ class NaiveBayes:
             activeTokens = []
             for token in withTokens:                
                 if token in self._countsPerTokenAndLabel:
-                    # Laplacian normalization
-                    lprob = 1.0/(len(self._countsPerLabel))
                     #print "laplacian", token, label, lprob
+                    matches = 0
                     if label in self._countsPerTokenAndLabel[token]:
                         matches = self._countsPerTokenAndLabel[token][label]
-                        lprob = float(matches)/self._countsPerToken[token]                
                         #print "calcd", token, label, lprob
+                    
+                    # Probability with Laplacian correction
+                    number_of_different_tokens = len(self._countsPerToken)
+                    tokens_with_label = self._countsPerLabel[label]
+                    
+                    lprob = (1.0+matches)/(number_of_different_tokens+tokens_with_label)                        
+                        
                     labelProbabilities.append(lprob)
                     activeTokens.append(token)
                
             # reduce(mul,lst,1.0) does a product over independet assumption
             #  for p(x_i|C) to get p(X|C)
+            
             labelprob = labelProb*reduce(mul, labelProbabilities, 1.0)
+            #print "'%s' with %s :" % (label, str(withTokens))
+            #print "p(C)=%.2f, p(X|C)=%.4f -> p(C|X)=%.4f" % (labelProb, reduce(mul, labelProbabilities, 1.0), labelprob)
+            #print
             probs.append( (labelprob , label) )
             normsum+=labelprob
         
@@ -139,8 +148,8 @@ def tokenize_en(s):
     previous = None
     for word in (re.sub(r'\W+', ' ', s.lower())).split():
         # Skip word if preceeded by not
-        word = word.rstrip('s')                
-        if word not in ["has", "a", "and", "an", "is", "in", "the", "have"]:
+        if word not in ["i", "am", "has", "a", "and", "an", "is", "in", "the", "have"]:
+            word = word.rstrip('s')  
             if previous == "not" and previous == "no":
                 yield ' '.join(previous,word)
             else:

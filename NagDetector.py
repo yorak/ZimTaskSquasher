@@ -104,7 +104,7 @@ def verify_classifiers(nagssifiers, fromfile, verbose=0):
             if tag=="":
                 tag = slack_tag
                 
-            print("%s: %d %% right, %d wrong" %
+            print("%s: %d %% right, %d %% wrong" %
                 (tag, right*100/tot, wrong*100/tot) )
     if verbose==0:
         print("They _do_ classify, up the verbiosity for more info.")

@@ -23,6 +23,9 @@ except:
 
 import datetime
 import os.path
+import glob
+import random
+import time
  
 import SquasherConfig
 import SquasherTasks
@@ -46,6 +49,7 @@ class TaskSquasherLiteWindow:
     settings = SquasherConfig.defaultSettings
     task_activity_log_file = None
     user_activity_log_file = None
+    nag_teach_file = None
    
     workaround_block_signals = False
     state = States.WAIT_NEW
@@ -61,6 +65,7 @@ class TaskSquasherLiteWindow:
     
     # Nagging classifiers 
     nagssifiers = None
+    nagViolationTimeStamp = None
     
     ## Helper methods ##
     
@@ -148,14 +153,7 @@ class TaskSquasherLiteWindow:
             elif (state==States.STOPPED): 
                 self.statusBar.push(0, "Task: Stopped")
             self.last_status_task = state
-            
-    def nag(self):
-        md = gtk.MessageDialog(self.window, 
-            gtk.DIALOG_DESTROY_WITH_PARENT, gtk.MESSAGE_WARNING, 
-            gtk.BUTTONS_OK, "Slacker!")
-        md.run()
-        md.destroy()
-        
+     
     def remove_active_task(self):
         self.taskWidget.set_active(-1)
         for row in self.storeTasks:
@@ -163,6 +161,61 @@ class TaskSquasherLiteWindow:
                 self.storeTasks.remove(row.iter)
                 break          
         self.activeTask = None
+        
+    def check_need_for_nag(self, activeWindow):
+
+        shouldNag = test_if_should_nag(
+            self.nagssifiers, self.activeTask.tags,
+            activeWindow, self.settings['nag_require_all_tags'])
+        
+        if shouldNag:
+            if not self.nagViolationTimeStamp:
+                self.nagViolationTimeStamp = time.time()                    
+            else:
+                slack = self.settings['nag_slack']/1000.0
+                if (time.time()-self.nagViolationTimeStamp)>slack:
+                    # Slacker alert! Show NAG Dialog!
+                    nagdlg = self.wTree.get_object("dialogNag")
+                    nagimg = self.wTree.get_object("imageNag")
+                    
+                    # Select one from avaliable motivational posters
+                    pf = self.settings['nag_motivational_posters_folder']
+                    images = list( glob.glob(os.path.join(pf, "*.jpg")) ) 
+                    nagimg.set_from_file( random.choice(images) )
+                    
+                    paused = False
+                    taskText  = None
+                    if self.state == States.STARTED:
+                        paused = True
+                        taskText = self.activeTask.verb+" "+self.activeTask.task
+                        self.log_activity(self.task_activity_log_file, taskText, "PAUSED")
+                        
+                    nagdlg.output = nagdlg.run()
+                    nagdlg.hide() # hide prevents destroying the dialog
+                    
+                    if paused:
+                        self.state = States.STARTED
+                        self.log_activity(self.task_activity_log_file, taskText, "STARTED")
+                        
+                    
+                    self.nagViolationTimeStamp = None
+        else:
+            self.nagViolationTimeStamp = None           
+        
+    
+
+    def update_nagger(self):
+        if not self.teaching and self.settings['nag']:
+            if self.nag_teach_file:
+                self.nag_teach_file.close()
+                
+            nagfn = self.settings['nag_teach_file']
+            if os.path.isfile(nagfn):
+                self.nagssifiers = teach_classifiers(nagfn)
+                verify_classifiers(self.nagssifiers, nagfn, verbose=2)
+            
+            # Open for possible additional teaching
+            self.nag_teach_file = open(nagfn, 'a+')
         
     ## Signal callback functions. ##
     
@@ -178,7 +231,7 @@ class TaskSquasherLiteWindow:
                 self.log_activity(self.task_activity_log_file, taskText, "STOPPED")
                 
             self.log_activity(self.task_activity_log_file, taskText, "REJECTED")
-            self.activeTask.state = "X"
+            self.activeTask.state = 'x'
             
             if self.settings['get_tasks_from_file']:
                 tfn = self.settings['task_source_file']
@@ -302,6 +355,7 @@ class TaskSquasherLiteWindow:
             return        
         # Toggle state
         self.teaching = not self.teaching
+        self.update_nagger()
         self.update_statusbar()
         
     def check_activity(self):
@@ -323,25 +377,22 @@ class TaskSquasherLiteWindow:
         activeChanged = self.lastActiveWindowTitle!=activeWindow
         notSelfActive = activeWindow != self.window.get_title()
         
-        if activeWindow and notSelfActive and activeChanged:
-           
+        if activeWindow and notSelfActive and activeChanged:           
             self.log_activity(self.user_activity_log_file, activeWindow, "ACTIVATED")
-            self.lastActiveWindowTitle = activeWindow
         
-            if self.settings['nag']:
-                # Teach active window to be specific for current task (or lack of)
-                if self.teaching and self.nag_teach_file:
+        if activeWindow and notSelfActive and self.settings['nag']:
+            # Teach active window to be specific for current task (or lack of)
+            if self.teaching:
+                if self.nag_teach_file and activeChanged:
                     activeTags = []
                     if self.activeTask:
                         activeTags = self.activeTask.tags
                     self.log_activity(self.nag_teach_file, activeWindow, str(activeTags))
-                elif self.activeTask and self.state == States.STARTED:
-                    doNag = test_if_should_nag(
-                        self.nagssifiers, self.activeTask.tags,
-                        activeWindow, self.settings['nag_require_all_tags'])
-                    if doNag:
-                        self.nag()
-                        
+            elif self.activeTask and self.state == States.STARTED:
+                self.check_need_for_nag(activeWindow)
+                
+        self.lastActiveWindowTitle = activeWindow
+                     
         # This makes the timer to go on and on
         return True
          
@@ -419,13 +470,7 @@ class TaskSquasherLiteWindow:
             self.log_activity(self.user_activity_log_file, "Activity monitor", "ONLINE")
             
         if self.settings['nag']:
-            nagfn = self.settings['nag_teach_file']
-            if os.path.isfile(nagfn):
-                self.nagssifiers = teach_classifiers(nagfn)
-                verify_classifiers(self.nagssifiers, nagfn, verbose=1)
-            
-            # Open for possible additional teaching
-            self.nag_teach_file = open(nagfn, 'a+')
+            self.update_nagger()
             
         # and the window
         self.window.show()
